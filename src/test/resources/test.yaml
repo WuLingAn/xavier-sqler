@@ -1,0 +1,2 @@
+pojo: !!org.bor.cpf.cps.yml.Pojo {name: name}
+pojo2: !!org.bor.cpf.cps.yml.Pojo [ '"name']
