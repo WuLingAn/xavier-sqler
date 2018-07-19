@@ -13,8 +13,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import prv.simple.db.api.DBException;
+import prv.simple.db.api.FetchException;
 import prv.simple.db.basic.DSManager;
 
+/**
+ * 非线程安全的sql操作类
+ * 
+ * 
+ * @author Xavier
+ *
+ */
 public class SqlHelper implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlHelper.class);
 
@@ -84,17 +92,33 @@ public class SqlHelper implements AutoCloseable {
 
     public void begin() {
         execWithTransaction.set(true);
-        ;
     }
 
+    /**
+     * <p>
+     * 事务结束，提交整个事务
+     * <p>
+     * 提交完成后需要注意资源释放
+     * 
+     * <pre>
+     * close();
+     * </pre>
+     * <p>
+     * 使用独立对象包装begin()和commit()，使其含义独立
+     * 
+     * @throws SQLException
+     */
     public void commit() throws SQLException {
         // 标志事务结束
-        execWithTransaction.set(false);
-        // 非自动提交的情况下可手动进行sql执行提交
-        if (!con.getAutoCommit()) {
-            con.commit();
+        if (execWithTransaction.getAndSet(false)) {
+            throw new FetchException("发生了预期外的事务提交操作");
         }
-        // TODO 释放资源
+        // 在连接上执行commit操作。
+        con.commit();
+        con.close();
+        con = null;
+        ps.close();
+        ps = null;
     }
 
     public void addBatch() throws DBException {
@@ -109,15 +133,19 @@ public class SqlHelper implements AutoCloseable {
         }
     }
 
+    /**
+     * 批处理方法至少需要一个参数
+     * 
+     * @throws DBException
+     */
     private void checkBatchParam() throws DBException {
-        if (params.length < 1) {
-            throw new DBException("添加的批处理参数无效请确认!");
+        if (params == null || params.length < 1) {
+            throw new DBException("添加的批处理参数无效,请确认!");
         }
     }
 
     public int[] executeBatch() throws SQLException {
         int[] chgNums = ps.executeBatch();
-
         return chgNums;
     }
 
@@ -136,7 +164,7 @@ public class SqlHelper implements AutoCloseable {
         if (con == null) {
             con = DSManager.getConnection(alias);
         }
-        // TODO 事物状态下，取消自动提交，非开启事物状态下是否需要开启自动提交功能
+        // 事物状态下，取消自动提交，非开启事物状态下是否需要开启自动提交功能？
         con.setAutoCommit(!execWithTransaction.get());
 
         // 每次执行不同sql，生成不同的PreparedStatement
@@ -144,6 +172,9 @@ public class SqlHelper implements AutoCloseable {
         setParams();
     }
 
+    /*
+     * 将set的各种参数设置到PreparedStatement中
+     */
     private void setParams() throws SQLException {
         for (int i = 0; i < params.length; i++) {
             Object o = params[i];

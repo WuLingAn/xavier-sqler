@@ -1,4 +1,4 @@
-!!org.bor.cpf.cps.cls.DefaultConfigAdapter
+!!prv.simple.db.basic.DefaultConfigAdapter
   alias: test1
   jdbcUrl: jdbc:mysql://127.0.0.1:3306/test
   driverClassName: org.mariadb.jdbc.Driver
@@ -14,7 +14,7 @@
      prepStmtCacheSize: 250
      prepStmtCacheSqlLimit: 2048
 ---
-!!org.bor.cpf.cps.cls.DefaultConfigAdapter
+!!prv.simple.db.basic.DefaultConfigAdapter
   alias: test2
   jdbcUrl: jdbc:mysql://127.0.0.1:3306/mtest
   driverClassName: org.mariadb.jdbc.Driver

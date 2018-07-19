@@ -184,7 +184,7 @@ public class AppTest {
         config.validate();
         // com.zaxxer.hikari.mocks.StubDataSource
         Class<?> clazz = this.getClass().getClassLoader().loadClass(config.getDataSourceClassName());
-        DataSource dataSource = (DataSource) clazz.newInstance();
+        DataSource dataSource = (DataSource) clazz.getDeclaredConstructor().newInstance();
         PropertyElf.setTargetFromProperties(dataSource, config.getDataSourceProperties());
 
         dataSource.getConnection();
