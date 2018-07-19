@@ -19,7 +19,7 @@ import prv.simple.db.basic.DSManager;
 /**
  * 非线程安全的sql操作类
  * 
- * 
+ * @deprecated 升个级吧
  * @author Xavier
  *
  */
@@ -32,6 +32,7 @@ public class SqlHelper implements AutoCloseable {
     private volatile String sqlStr;
     private Object[] params;
     private ResultSet rs;
+    private int queryTimeout = 0;
 
     private volatile AtomicBoolean execWithTransaction = new AtomicBoolean(false);
 
@@ -169,6 +170,9 @@ public class SqlHelper implements AutoCloseable {
 
         // 每次执行不同sql，生成不同的PreparedStatement
         ps = con.prepareStatement(sqlStr);
+        if (queryTimeout >= 100) {
+            ps.setQueryTimeout(queryTimeout);
+        }
         setParams();
     }
 
@@ -318,6 +322,19 @@ public class SqlHelper implements AutoCloseable {
         }
 
         return number;
-
+    }
+    
+    /**
+     * 设置超时执行时间，当设置值小于100时，设置无效
+     * 
+     * @param timeout
+     *            超时时间
+     */
+    public void setExecuteTimeOut(int timeout) {
+        if (timeout < 100) {
+            LOGGER.warn("你设置的值{}小于100ms，设置无效！", timeout);
+            return;
+        }
+        this.queryTimeout = timeout;
     }
 }

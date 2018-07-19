@@ -20,6 +20,9 @@ public class DSManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(DSManager.class);
     private static final Map<String, DataSource> dataSources = new ConcurrentHashMap<>();
 
+    private DSManager() {
+    }
+
     private static final String CONF_FILE_NAME = "dbs-conf.yaml";
 
     static {
