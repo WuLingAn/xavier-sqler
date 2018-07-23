@@ -16,14 +16,15 @@ import org.slf4j.LoggerFactory;
 
 import prv.simple.db.api.DBException;
 import prv.simple.db.basic.DSManager;
+import prv.simple.db.basic.Transaction;
 import prv.simple.db.basic.Util;
 
 public class SqlManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlManager.class);
     private static final Map<String, Connection> cons = new ConcurrentHashMap<>();
+    private static final Map<String, Connection> transaction = new ConcurrentHashMap<>();
 
     public static Sql getSql(String alias) {
-
         return new Sql(getConnection(alias));
     }
 
@@ -40,6 +41,31 @@ public class SqlManager {
             LOGGER.debug("创建sql获取连接时出现问题！", e);
         }
         return con;
+    }
+
+    public static Transaction begin(String alias) {
+        String key = Util.getCurrentId(alias);
+        Connection con = getConnection(alias);
+        if (con != null) {
+            try {
+                if (con.getAutoCommit()) {
+                    con.setAutoCommit(false);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            transaction.put(key, con);
+        }
+        Transaction tg = new Transaction(alias);
+        return tg;
+    }
+
+    public static boolean isBegin(String alias) {
+        return transaction.get(Util.getCurrentId(alias)) != null;
+    }
+
+    public static void commit(String alias) {
+
     }
 
     /**
@@ -66,7 +92,6 @@ public class SqlManager {
         private Object[] params;
         private ResultSet rs;
         private int queryTimeout = 0;
-        private volatile AtomicBoolean batchFlag = new AtomicBoolean(false);
 
         private volatile AtomicBoolean execWithTransaction = new AtomicBoolean(false);
 
@@ -81,7 +106,6 @@ public class SqlManager {
         protected boolean isClosed() {
             return con == null;
         }
-
 
         /**
          * 批处理方法至少需要一个参数
@@ -102,7 +126,7 @@ public class SqlManager {
         public void addBatch() throws DBException {
             try {
                 checkBatchParam();
-                this.prepare(true);
+                this.prepare();
                 pst.addBatch();
             } catch (SQLException e) {
                 throw new DBException(e);
@@ -115,8 +139,15 @@ public class SqlManager {
             this.sqlStr = sqlstr;
             params = new Object[paramNum()];
             // 设置新sql意味着重新来过
+            if (pst != null) {
+                try {
+                    pst.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+                pst = null;
+            }
         }
-
 
         /**
          * 计算需执行sql中有多少占位符<code>?</code>
@@ -144,27 +175,11 @@ public class SqlManager {
          * 
          * @throws SQLException
          */
-        private void prepare(boolean isBatch) throws SQLException {
-            // 批处理不进行
-            if (!isBatch) {
-                close();
+        private void prepare() throws SQLException {
+            if (pst == null) {
+                // 设置不同的sql，生成不同的PreparedStatement
+                pst = con.prepareStatement(sqlStr);
             }
-            // 每次执行不同sql，生成不同的PreparedStatement
-            pst = con.prepareStatement(sqlStr);
-            if (queryTimeout >= 100) {
-                pst.setQueryTimeout(queryTimeout);
-            }
-            setParams();
-        }
-
-        /**
-         * 获取数据库连接，初始化prepareStatement
-         * 
-         * @throws SQLException
-         */
-        private void prepareBatch() throws SQLException {
-            // 每次执行不同sql，生成不同的PreparedStatement
-            pst = con.prepareStatement(sqlStr);
             if (queryTimeout >= 100) {
                 pst.setQueryTimeout(queryTimeout);
             }
