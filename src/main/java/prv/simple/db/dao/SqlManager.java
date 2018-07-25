@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import prv.simple.db.api.DBException;
+import prv.simple.db.api.FetchException;
 import prv.simple.db.basic.DSManager;
 import prv.simple.db.basic.Transaction;
 import prv.simple.db.basic.Util;
@@ -22,7 +23,7 @@ import prv.simple.db.basic.Util;
 public class SqlManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(SqlManager.class);
     private static final Map<String, Connection> cons = new ConcurrentHashMap<>();
-    private static final Map<String, Connection> transaction = new ConcurrentHashMap<>();
+    private static final Map<String, Connection> transactionCons = new ConcurrentHashMap<>();
 
     public static Sql getSql(String alias) {
         return new Sql(getConnection(alias));
@@ -54,18 +55,58 @@ public class SqlManager {
             } catch (SQLException e) {
                 e.printStackTrace();
             }
-            transaction.put(key, con);
+            transactionCons.put(key, con);
         }
-        Transaction tg = new Transaction(alias);
-        return tg;
+        Transaction transaction = new Transaction(alias);
+        return transaction;
     }
 
     public static boolean isBegin(String alias) {
-        return transaction.get(Util.getCurrentId(alias)) != null;
+        return transactionCons.get(Util.getCurrentId(alias)) != null;
     }
 
-    public static void commit(String alias) {
+    /**
+     * 提交指定事务
+     * 
+     * @param transaction
+     *            指定事务
+     * @throws SQLException
+     */
+    public static void commit(Transaction transaction) throws SQLException {
+        Connection con = transactionCons.remove(transaction.getKey());
+        if(con == null) {
+            LOGGER.error("未获取到指定提交事务的连接:{}", transaction.getKey());
+            throw new FetchException("未获取到指定提交事务的连接:" + transaction.getKey());
+        }
+        if (con.getAutoCommit()) {
+            LOGGER.warn("指定连接:{} 事务已关闭", transaction.getKey());
+            return;
+        }
+        con.commit();
+        con.setAutoCommit(true);
+        transaction.setInValid(Util.getCurrentId(transaction.getAlias()));
+    }
 
+    /**
+     * 回滚指定事务
+     * 
+     * @param transaction
+     *            指定事务
+     * @throws SQLException
+     */
+    public static void rollback(Transaction transaction) throws SQLException {
+        Connection con = transactionCons.remove(transaction.getKey());
+        if (con == null) {
+            LOGGER.error("未获取到指定回滚事务的连接:{}", transaction.getKey());
+            throw new FetchException("未获取到指定回滚事务的连接:" + transaction.getKey());
+        }
+        if (con.getAutoCommit()) {
+            LOGGER.warn("指定连接:{} 事务已关闭", transaction.getKey());
+            return;
+        }
+        con.rollback();
+        con.setAutoCommit(true);
+        transaction.setInValid(Util.getCurrentId(transaction.getAlias()));
     }
 
     /**
